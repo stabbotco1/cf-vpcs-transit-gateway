@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+
+  VPCName:
+    Default: 'dev-useast2-vpc'
+    Type: String
+
+  Environment:
+    Default: 'prod'
+    Type: String
+    AllowedValues:
+      - prod
+
+  Region:
+    Default: 'us-east-2'
+    Type: String
+
+  TransitGatewayASN:
+    Default: '64612'
+    ConstraintDescription: Must be an integer between 64512 and 65534
+    Description: The ASN for the AWS Transit Gateway
+    Type: Number
+    MinValue: '64512'
+    MaxValue: '65534'
+
+Resources:
+  TransitGateway:
+    Type: 'AWS::EC2::TransitGateway'
+    Properties:
+      AmazonSideAsn: !Ref TransitGatewayASN
+      Description: VPC transit gateway
+      AutoAcceptSharedAttachments: enable
+      DefaultRouteTableAssociation: enable
+      DnsSupport: enable
+      VpnEcmpSupport: enable
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-vpc-${Region}-TGW'
+        - Key: Environment
+          Value: !Sub '${Environment}'
+        - Key: Team
+          Value: 'Creative Intelligence'
+        - Key: Project
+          Value: 'ci-infra-vpc'
+
+
+
+Outputs:
+
+  TransitGateway:
+    Description: The ID of the TransitGateway
+    Value: !Ref TransitGateway
+    Export:
+      Name: !Sub '${Environment}-vpc-${Region}-TGW'

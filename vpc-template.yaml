@@ -1,0 +1,517 @@
+# This creates a VPC with two public subnets and two private subnets in two Availability Zones, 
+# together with a NAT Gateway and associated routing. Change the Availability Zone locations as needed.
+
+# Important: this configures various AWS services and there are costs associated with these services after the Free Tier usage.
+# Please see the AWS Pricing pages for details. You are responsible for any AWS costs incurred. 
+# No warranty is implied in this example.
+
+# Usage from command line:
+#   aws cloudformation --region <<YOUR-REGION>> create-stack --stack-name vpc- --template-body file://vpc-setup.yaml
+#   aws cloudformation --region us-east-2 create-stack --stack-name test-vpc21 --template-body file://vpc-6-subnets.yaml
+
+Parameters:
+  VPCCIDR:
+    Default: 10.0.0.0/16
+    Type: String
+
+  VPCName:
+    Default: 'dev-useast2-vpc'
+    Type: String
+  Environment:
+    Default: 'dev'
+    Type: String
+  Region:
+    Default: 'us-east-2'
+    Type: String
+
+  BastionKeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: eks-us-east2
+
+  TransitGatewayExportName:
+    Type: String
+    Default: ''
+
+  ## Limits routing between subnets in an environment VPC group 
+  SubnetRouteCIDR:
+    Type: String
+    Default: '10.240.0.0/15'
+
+  ## SUBNET CIDRs
+  PublicSubnetACIDR:
+    Default: 10.0.1.0/24
+    Type: String
+  PublicSubnetBCIDR:
+    Default: 10.0.2.0/24
+    Type: String
+  PublicSubnetCCIDR:
+    Default: 10.0.3.0/24
+    Type: String
+  PrivateSubnetACIDR:
+    Default: 10.0.4.0/24
+    Type: String
+  PrivateSubnetBCIDR:
+    Default: 10.0.5.0/24
+    Type: String
+  PrivateSubnetCCIDR:
+    Default: 10.0.6.0/24
+    Type: String
+
+  ## Enable Flow Logging
+  EnableFlowLogging:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  ## Log group retention
+  RetentionInDays:
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+
+  ## VPC Flow traffic type
+  TrafficType:
+    Type: String
+    Default: ALL
+    AllowedValues:
+    - ACCEPT
+    - REJECT
+    - ALL
+
+Conditions:
+  EnableFlowLogsCondition: !Equals [!Ref EnableFlowLogging, 'true']
+  AttachTGW: !Not 
+    - !Equals [!Ref TransitGatewayExportName, '']
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-026b57f3c383c2eec
+    us-west-1:
+      AMI: ami-9e247efe
+    us-east-2:
+      AMI: ami-0f924dc71d44d23e2
+    us-west-2:
+      AMI: ami-8ca83fec
+
+Resources:
+  ## VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref 'VPCCIDR' 
+      Tags:
+      - Key: Name
+        Value: !Ref 'VPCName' 
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+      - Key: ParamPassedIn
+        Value: !Ref 'VPCName'
+      - Key: testTag
+        Value: testTagValue
+
+  ## SUBNETS     
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub '${Region}a'
+      CidrBlock: !Ref 'PublicSubnetACIDR'
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Sub '${VPCName}-${Region}-Public-Subnet-a'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+      - Key: 'kubernetes.io/role/elb'
+        Value: 1
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub '${Region}b'
+      CidrBlock: !Ref 'PublicSubnetBCIDR'
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Sub '${VPCName}-${Region}-Public-Subnet-b'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+      - Key: 'kubernetes.io/role/elb'
+        Value: 1
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub '${Region}c'
+      CidrBlock: !Ref 'PublicSubnetCCIDR'
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Sub '${VPCName}-${Region}-Public-Subnet-c'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+      - Key: 'kubernetes.io/role/elb'
+        Value: 1
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub '${Region}a'
+      CidrBlock: !Ref 'PrivateSubnetACIDR'
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: !Sub '${VPCName}-${Region}-Private-Subnet-a'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+      - Key: 'kubernetes.io/role/internal-elb'
+        Value: 1
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub '${Region}b'
+      CidrBlock: !Ref 'PrivateSubnetBCIDR'
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: !Sub '${VPCName}-${Region}-Private-Subnet-b'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+      - Key: 'kubernetes.io/role/internal-elb'
+        Value: 1
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Sub '${Region}c'
+      CidrBlock: !Ref 'PrivateSubnetCCIDR'
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: !Sub '${VPCName}-${Region}-Private-Subnet-c'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+      - Key: 'kubernetes.io/role/internal-elb'
+        Value: 1
+
+# IMPORTANT !! - the TGW Attachment can reach ALL subnets in a given AZ when it is added
+#  It is NOT limited to the subnet used to provide the AZ (so attaching public only is OK)
+# # Ref: https://repost.aws/questions/QUxw-Mtq06S1C3Q_uZkinkjg/transit-gateway-multiple-subnet-per-az
+  VPCTGWAttachment:
+    Condition: AttachTGW
+    Type: 'AWS::EC2::TransitGatewayAttachment'
+    Properties:
+      SubnetIds:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+        - !Ref PublicSubnetC
+      TransitGatewayId:
+        Fn::ImportValue: !Ref 'TransitGatewayExportName'
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - ''
+            - - VPCAttachment-
+              - !Ref VPCCIDR
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Sub '${Environment}-${Region}-${VPCName}-IGW1'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+
+  GatewayToInternet:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  ## PUBLIC ROUTING
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  TGWPublicSubnetRoute:
+    Condition: AttachTGW
+    Type: AWS::EC2::Route
+    DependsOn: VPCTGWAttachment
+    Properties:
+      TransitGatewayId:
+        Fn::ImportValue: !Ref 'TransitGatewayExportName'
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: !Ref SubnetRouteCIDR
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      RouteTableId: !Ref PublicRouteTable
+  
+  ## NAT GATEWAY
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: NatPublicIP
+    Properties: 
+      SubnetId: !Ref PublicSubnetA
+      AllocationId: !GetAtt NatPublicIP.AllocationId
+
+  ## ELASTIC IP
+  NatPublicIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPC
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value: !Sub '${Environment}-vpc-${Region}-EIP'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'  
+
+  ## PRIVATE ROUTING
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+
+  TGWPrivateSubnetRoute:
+    Condition: AttachTGW
+    Type: AWS::EC2::Route
+    DependsOn: VPCTGWAttachment
+    Properties:
+      TransitGatewayId:
+        Fn::ImportValue: !Ref 'TransitGatewayExportName'
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: !Ref SubnetRouteCIDR
+
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+  PrivateSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetC
+      RouteTableId: !Ref PrivateRouteTable
+
+  ## Bastion Host Security Group
+  #   Can be used as a template to apply SG to VPC traffic
+  #   in addition to routing table rules
+  PublicInstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref 'VPC'
+      GroupDescription: Enable SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0  
+
+  LinuxBastionHost:
+    Type: AWS::EC2::Instance
+    DependsOn: GatewayToInternet
+    Properties:
+      KeyName: !Ref 'BastionKeyPair'
+      ImageId: !FindInMap [RegionMap, !Ref 'Region', AMI]
+      InstanceType: t2.micro
+      NetworkInterfaces:
+      - AssociatePublicIpAddress: true
+        DeleteOnTermination: true
+        Description: ENI for bastion host
+        DeviceIndex: '0'
+        SubnetId: !Ref 'PublicSubnetA'
+        GroupSet:
+        - !Ref 'PublicInstanceSG'
+      Tags:
+      - Key: Name
+        Value: !Sub '${Environment}-${Region}-${VPCName}-bastion'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+
+  ## VPC Flow Logs
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      RetentionInDays: !Ref RetentionInDays
+      Tags:
+      - Key: Name
+        Value: !Sub '${Environment}-${Region}-${VPCName}-log-group1'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+
+  Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'vpc-flow-logs.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: 'flowlogs-policy'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'logs:CreateLogStream'
+            - 'logs:PutLogEvents'
+            - 'logs:DescribeLogGroups'
+            - 'logs:DescribeLogStreams'
+            Resource: !GetAtt 'LogGroup.Arn'
+      Tags:
+      - Key: Name
+        Value: !Sub '${Environment}-${Region}-${VPCName}-role'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+
+  FlowLog:
+    Condition: EnableFlowLogsCondition
+    Type: 'AWS::EC2::FlowLog'
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt 'Role.Arn'
+      LogGroupName: !Ref LogGroup
+      ResourceId: !Ref VPC
+      ResourceType: 'VPC'
+      TrafficType: !Ref TrafficType
+      Tags:
+      - Key: Name
+        Value: !Sub '${Environment}-${Region}-${VPCName}-flowlog'
+      - Key: Environment
+        Value: !Sub '${Environment}'
+      - Key: Team
+        Value: 'Creative Intelligence'
+      - Key: Project
+        Value: 'ci-infra-vpc'
+
+# Outputs:
+#   VPCName:
+#     Value: !Ref VPCName
+#     Export:
+#       Name: !Ref VPCName
+
+#   VPCCIDR:
+#     Value: !Ref VPCCIDR
+#     Export:
+#       Name: !Sub '${Environment}-vpc-${Region}-VPCCIDR'
+
+#   PublicSubnetACIDR:
+#     Value: !Ref PublicSubnetACIDR
+#     Export:
+#       Name: !Sub '${Environment}-vpc-${Region}-PublicSubnetACIDR'
+#   PublicSubnetBCIDR:
+#     Value: !Ref PublicSubnetBCIDR
+#     Export:
+#       Name: !Sub '${Environment}-vpc-${Region}-PublicSubnetBCIDR'
+#   PublicSubnetCCIDR:
+#     Value: !Ref PublicSubnetCCIDR
+#     Export:
+#       Name: !Sub '${Environment}-vpc-${Region}-PublicSubnetCCIDR'
+#   PrivateSubnetACIDR:
+#     Value: !Ref PrivateSubnetACIDR
+#     Export:
+#       Name: !Sub '${Environment}-vpc-${Region}-PrivateSubnetACIDR'
+#   PrivateSubnetBCIDR:
+#     Value: !Ref PrivateSubnetBCIDR
+#     Export:
+#       Name: !Sub '${Environment}-vpc-${Region}-PrivateSubnetBCIDR'
+#   PrivateSubnetCCIDR:
+#     Value: !Ref PrivateSubnetCCIDR
+#     Export:
+#       Name: !Sub '${Environment}-vpc-${Region}-PrivateSubnetCCIDR'

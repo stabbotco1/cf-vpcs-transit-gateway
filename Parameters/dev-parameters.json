@@ -1,0 +1,58 @@
+[
+  {
+    "ParameterKey": "VPCName",
+    "ParameterValue": "dev-VPC"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "BastionKeyPair",
+    "ParameterValue": "eks-us-east2"
+  },
+  {
+    "ParameterKey": "Region",
+    "ParameterValue": "us-east-2"
+  },
+  {
+    "ParameterKey": "VPCCIDR",
+    "ParameterValue": "10.240.0.0/16"
+  },
+  {
+    "ParameterKey": "PublicSubnetACIDR",
+    "ParameterValue": "10.240.160.0/20"
+  },
+  {
+    "ParameterKey": "PublicSubnetBCIDR",
+    "ParameterValue": "10.240.176.0/20"
+  },
+  {
+    "ParameterKey": "PublicSubnetCCIDR",
+    "ParameterValue": "10.240.192.0/20"
+  },
+  {
+    "ParameterKey": "PrivateSubnetACIDR",
+    "ParameterValue": "10.240.208.0/20"
+  },
+  {
+    "ParameterKey": "PrivateSubnetBCIDR",
+    "ParameterValue": "10.240.224.0/20"
+  },
+  {
+    "ParameterKey": "PrivateSubnetCCIDR",
+    "ParameterValue": "10.240.240.0/20"
+  },
+  {
+    "ParameterKey": "EnableFlowLogging",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "TransitGatewayExportName",
+    "ParameterValue": "prod-vpc-us-east-2-TGW"
+  },
+  {
+    "ParameterKey": "SubnetRouteCIDR",
+    "ParameterValue": "10.240.0.0/15"
+  }
+]
